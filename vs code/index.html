@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fraud Desk: transaction fraud detection</title>
+
+<style>
+:root{--bg:#f2f4f2;--card:#fff;--fg:#15211d;--mut:#5d6b66;--bd:#d6ddd9;--ok:#0f766e;--bad:#c2372d;--warn:#a8650b;--okbg:#dcf0ec;--badbg:#f8dfdc;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1513;--card:#17201d;--fg:#e6ede9;--mut:#93a39c;--bd:#2c3935;--ok:#3cc4b4;--bad:#ff6b5e;--warn:#e5a04a;--okbg:#12332e;--badbg:#3d1a17;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0e1513;--card:#17201d;--fg:#e6ede9;--mut:#93a39c;--bd:#2c3935;--ok:#3cc4b4;--bad:#ff6b5e;--warn:#e5a04a;--okbg:#12332e;--badbg:#3d1a17;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 Georgia,"Times New Roman",serif}
+main{max-width:980px;margin:0 auto;padding:28px 18px 60px}
+h1,h2{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-weight:600;margin:0}
+h1{font-size:clamp(30px,6vw,44px);line-height:1.1;letter-spacing:-.01em}
+h2{font-size:23px;margin-bottom:4px}
+.lead{color:var(--mut);max-width:62ch;margin:10px 0 0}
+section{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:20px;margin-top:20px}
+.sub{color:var(--mut);margin:0 0 14px;font-size:14px}
+button,.btn{font:600 14px system-ui,sans-serif;border:1px solid var(--fg);background:var(--fg);color:var(--bg);padding:9px 15px;border-radius:6px;cursor:pointer}
+button.alt,.btn.alt{background:transparent;color:var(--fg);border-color:var(--bd)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--ok);outline-offset:2px}
+button:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.stat{border:1px solid var(--bd);border-radius:8px;padding:10px 12px}
+.stat b{display:block;font-size:22px;font-variant-numeric:tabular-nums;font-family:Newsreader,serif}
+.stat span{color:var(--mut);font-size:13px}
+.msg{padding:10px 12px;border-radius:6px;margin:6px 0;font-size:14px}
+.msg.e{background:var(--badbg);color:var(--bad)}.msg.w{background:var(--okbg);color:var(--fg)}
+.tw{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{padding:8px 10px;border-bottom:1px solid var(--bd);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}th{color:var(--mut);font-weight:500;font-size:13px}
+tr.sel td{background:var(--okbg)}
+.cm{display:grid;grid-template-columns:auto 1fr 1fr;gap:4px;max-width:360px;font-size:14px}
+.cm div{padding:12px 8px;text-align:center;border-radius:6px}
+.cm .h{color:var(--mut);font-size:12px;padding:4px}
+.cm .g{background:var(--okbg)}.cm .r{background:var(--badbg)}.cm b{display:block;font-size:22px;font-family:Newsreader,serif}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:22px;margin-top:16px}
+input[type=range]{width:100%;accent-color:var(--ok)}
+canvas{width:100%;height:230px;display:block}
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0}
+label{font-size:13px;color:var(--mut);display:block}
+input[type=number],select{width:100%;font:inherit;padding:8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--fg)}
+.verdict{margin-top:14px;padding:18px;border-radius:8px;border:2px solid var(--bd)}
+.verdict.fraud{background:var(--badbg);border-color:var(--bad)}.verdict.legit{background:var(--okbg);border-color:var(--ok)}
+.verdict h3{font:600 30px Newsreader,serif;margin:0}
+.bar{height:10px;background:var(--bd);border-radius:5px;margin-top:10px;overflow:hidden}.bar i{display:block;height:100%;background:var(--bad)}
+.note{font-size:13px;color:var(--mut)}
+.ok{color:var(--ok);font-weight:700}.no{color:var(--bad);font-weight:700}td.wrap{white-space:normal;text-align:left;font-size:12.5px;min-width:200px}
+#tt th:nth-child(2),#ht th:nth-child(2),#vwrap th:nth-child(2){text-align:left}
+.hide{display:none}
+</style>
+</head>
+<body>
+<main>
+<h1>Fraud Desk</h1>
+<p class="lead">Train a fraud classifier on labelled transactions, judge it with precision, recall and F1 instead of accuracy alone, then score new transactions. Everything runs in your browser, so your data never leaves this page.</p>
+
+<section>
+<h2>1. Load transactions</h2>
+<p class="sub">Use a CSV with numeric feature columns and a 0/1 column named is_fraud, or generate a sample with about 1.6% fraud.</p>
+<div class="row"><button id="bSample">Use sample data</button><label class="btn alt" style="color:var(--fg)">Upload CSV<input id="file" type="file" accept=".csv" class="hide"></label></div>
+<div id="val"></div>
+</section>
+
+<section id="s2" class="hide">
+<h2>2. Train and evaluate</h2>
+<p class="sub">Stratified 75/25 split. Missing values are filled with the training median. Models: a baseline that always says legitimate, logistic regression, and a random forest, both weighted for class imbalance.</p>
+<button id="bTrain">Train models</button> <span id="tmsg" class="note"></span>
+<div id="res" class="hide">
+<div class="tw" style="margin-top:14px"><table id="tbl"></table></div>
+<p class="note" id="insight"></p>
+<label style="margin-top:14px">Fraud threshold: <b id="thv">0.50</b> (flag a transaction as fraud when its probability is at or above this)</label>
+<input id="th" type="range" min="0.05" max="0.95" step="0.01" value="0.5">
+<div class="row" style="margin-top:6px"><button class="alt" id="bBest">Set to best F1</button></div>
+<div class="two">
+<div><h2 style="font-size:18px">Confusion matrix</h2><p class="sub" id="cmname"></p><div class="cm" id="cm"></div></div>
+<div><h2 style="font-size:18px">Threshold trade-off</h2><p class="sub">Precision, recall and F1 as the threshold moves.</p><canvas id="cv"></canvas></div>
+</div>
+</div>
+</section>
+
+<section id="s3" class="hide">
+<h2>3. Check a transaction</h2>
+<p class="sub">Enter feature values, or fill the form with the typical legitimate or fraudulent profile from the training data. The is_fraud column is never an input.</p>
+<div class="row"><button class="alt" id="exL">Fill typical legitimate</button><button class="alt" id="exF">Fill typical fraud</button>
+<label style="margin:0">Model <select id="msel" style="width:auto"><option value="rf">Random forest</option><option value="lr">Logistic regression</option></select></label></div>
+<div class="form" id="form"></div>
+<button id="bPred">Classify transaction</button>
+<div id="out"></div>
+</section>
+
+<section id="s4" class="hide">
+<h2>4. Test cases</h2>
+<p class="sub">Eight sample transactions with the result we expect, plus validation checks that bad inputs are rejected. Run them against the trained models, or click Load to put a case into the form above.</p>
+<div class="row"><label style="margin:0">Model <select id="tsel" style="width:auto"><option value="rf">Random forest</option><option value="lr">Logistic regression</option></select></label><button id="bTests">Run all test cases</button></div>
+<div id="tsum"></div>
+<h3 style="margin:14px 0 6px">Prediction test cases</h3>
+<div class="tw"><table id="tt"></table></div>
+<div id="vwrap"></div>
+<p class="note">Expected labels assume the random forest at threshold 0.50. Logistic regression flags more transactions as fraud, so it can fail the borderline case.</p>
+</section>
+
+<section id="s5" class="hide">
+<h2>5. Test cases from the trained data</h2>
+<p class="sub" id="hsub"></p>
+<div class="row"><span class="note">Model:</span><button data-m="rf">Random forest</button><button class="alt" data-m="lr">Logistic regression</button></div>
+<div class="grid" id="hgrid"></div>
+<div class="tw" style="margin-top:14px"><table id="ht"></table></div>
+<p class="note">Up to three examples per outcome, spread from most to least fraud-like. A group with no rows means the model made no such outcome at this threshold. Load puts a row into the form in step 3.</p>
+</section>
+</main>
+<script>
+const $=s=>document.querySelector(s),T='is_fraud';
+const mul=a=>()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
+let R=mul(42),S={};
+const gauss=()=>Math.sqrt(-2*Math.log(R()+1e-12))*Math.cos(6.2832*R());
+const lgn=(m,s)=>Math.exp(m+s*gauss()),expo=m=>-m*Math.log(R()+1e-12);
+const pois=l=>{let L=Math.exp(-l),k=0,p=1;do{k++;p*=R()}while(p>L);return k-1};
+const ri=(a,b)=>a+Math.floor(R()*(b-a));
+const NIGHT=[0,1,2,3,4,23];
+
+function sample(n=10000){
+  const cols=['amount','hour','distance_from_home','txn_last_24h','account_age_days','avg_amount_30d','amount_ratio',T],rows=[];
+  for(let i=0;i<n;i++){
+    const f=R()<0.015?1:0,avg=lgn(3.8,.6),amt=f?lgn(4.6,1.1):lgn(3.8,1);
+    const hr=(f&&R()<.5)||(!f&&R()<.05)?NIGHT[ri(0,6)]:ri(6,23);
+    rows.push([R()<.002?'':+amt.toFixed(2),hr,+(f?expo(45):expo(18)).toFixed(2),f?pois(3.5):pois(2.2),f?ri(1,900):ri(10,3650),+avg.toFixed(2),+(amt/avg).toFixed(3),f]);
+  }
+  return {cols,rows:rows.map(r=>r.map(v=>v===''?null:v))};
+}
+function parseCSV(txt){
+  const L=txt.replace(/\r/g,'').split('\n').filter(l=>l.trim());
+  if(L.length<2)throw 'The file needs a header row and at least one data row.';
+  const cols=L[0].split(',').map(s=>s.trim().replace(/^"|"$/g,''));
+  const bad={};
+  const rows=L.slice(1).map(l=>l.split(',').map((c,j)=>{c=c.trim().replace(/^"|"$/g,'');if(c==='')return null;const v=Number(c);if(isNaN(v)){bad[cols[j]]=(bad[cols[j]]||0)+1;return null}return v}));
+  return {cols,rows,bad};
+}
+function validate(d){
+  const e=[],w=[],ti=d.cols.indexOf(T);
+  if(ti<0)e.push('Target column “'+T+'” was not found. Add a 0/1 column with that name.');
+  const feats=d.cols.filter(c=>c!==T);
+  if(d.bad)for(const c in d.bad)if(c!==T)e.push('Column “'+c+'” has '+d.bad[c]+' non-numeric values. Features must be numeric.');
+  let n0=0,n1=0,badLab=0,nul=0;
+  if(ti>=0)for(const r of d.rows){const v=r[ti];if(v===null)nul++;else if(v===0)n0++;else if(v===1)n1++;else badLab++}
+  if(ti>=0){
+    if(nul)e.push(nul+' rows have a missing '+T+' label.');
+    if(badLab)e.push(badLab+' rows have a label that is not 0 or 1.');
+    if(!nul&&!badLab&&(!n0||!n1))e.push('The target has only one class, so a classifier cannot be trained.');
+  }
+  const miss=feats.map(c=>[c,d.rows.filter(r=>r[d.cols.indexOf(c)]===null).length]).filter(x=>x[1]);
+  if(miss.length)w.push('Missing feature values (filled with the median during training): '+miss.map(x=>x[0]+' '+x[1]).join(', ')+'.');
+  const dup=d.rows.length-new Set(d.rows.map(r=>r.join('|'))).size;
+  if(dup)w.push(dup+' duplicate rows found.');
+  return {e,w,feats,n0,n1,ti};
+}
+function showVal(d,v){
+  let h='';
+  v.e.forEach(m=>h+='<div class="msg e">'+m+'</div>');v.w.forEach(m=>h+='<div class="msg w">'+m+'</div>');
+  if(!v.e.length){
+    const rate=v.n1/(v.n0+v.n1);
+    h='<div class="grid" style="margin-top:12px"><div class="stat"><b>'+d.rows.length.toLocaleString()+'</b><span>transactions</span></div><div class="stat"><b>'+v.feats.length+'</b><span>numeric features</span></div><div class="stat"><b>'+v.n1.toLocaleString()+'</b><span>fraud ('+(rate*100).toFixed(2)+'%)</span></div><div class="stat"><b>'+v.n0.toLocaleString()+'</b><span>legitimate</span></div></div>'+h+'<div class="msg w">Data passed validation. Because fraud is this rare, a model that never flags fraud would still be '+((1-rate)*100).toFixed(1)+'% accurate, so we judge models on precision, recall and F1.</div>';
+  }
+  $('#val').innerHTML=h;$('#s2').classList.toggle('hide',!!v.e.length);
+  $('#res').classList.add('hide');$('#s3').classList.add('hide');$('#s4').classList.add('hide');$('#s5').classList.add('hide');$('#tmsg').textContent='';
+}
+function load(d){
+  const v=validate(d);S={d,v};showVal(d,v);
+}
+$('#bSample').onclick=()=>{R=mul(42);load(sample())};
+$('#file').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();
+  r.onload=()=>{try{load(parseCSV(r.result))}catch(x){$('#val').innerHTML='<div class="msg e">'+x+'</div>';$('#s2').classList.add('hide')}};r.readAsText(f)};
+
+/* ---- modelling ---- */
+function split(d,v){
+  const idx={0:[],1:[]};d.rows.forEach((r,i)=>idx[r[v.ti]].push(i));
+  const tr=[],te=[];
+  for(const k of [0,1]){const a=idx[k];for(let i=a.length-1;i>0;i--){const j=Math.floor(R()*(i+1));[a[i],a[j]]=[a[j],a[i]]}
+    const nt=Math.max(1,Math.round(a.length*.25));te.push(...a.slice(0,nt));tr.push(...a.slice(nt))}
+  return {tr,te};
+}
+const gi=p=>2*p*(1-p);
+function grow(X,y,idx,d){
+  const n=idx.length,pos=idx.reduce((s,i)=>s+y[i],0);
+  if(d==0||pos==0||pos==n||n<6)return{p:pos/n};
+  let best=null;const p=X[0].length;
+  for(let k=0;k<Math.max(2,Math.ceil(Math.sqrt(p)));k++){
+    const f=Math.floor(R()*p),v=idx.map(i=>X[i][f]).sort((a,b)=>a-b);
+    for(let q=1;q<12;q++){
+      const t=v[Math.floor(q*n/12)];let nl=0,pl=0;
+      for(const i of idx)if(X[i][f]<=t){nl++;pl+=y[i]}
+      const nr=n-nl;if(nl<3||nr<3)continue;
+      const g=nl*gi(pl/nl)+nr*gi((pos-pl)/nr);
+      if(!best||g<best.g)best={f,t,g};
+    }
+  }
+  if(!best)return{p:pos/n};
+  const L=[],Rr=[];for(const i of idx)(X[i][best.f]<=best.t?L:Rr).push(i);
+  return{f:best.f,t:best.t,l:grow(X,y,L,d-1),r:grow(X,y,Rr,d-1)};
+}
+const walk=(n,x)=>n.p!==undefined?n.p:walk(x[n.f]<=n.t?n.l:n.r,x);
+function trainRF(X,y){
+  const P=[],N=[];y.forEach((v,i)=>(v?P:N).push(i));const trees=[];
+  for(let t=0;t<60;t++){
+    const idx=[];for(let i=0;i<P.length;i++){idx.push(P[ri(0,P.length)]);idx.push(N[ri(0,N.length)])}
+    trees.push(grow(X,y,idx,6));
+  }
+  return x=>trees.reduce((s,t)=>s+walk(t,x),0)/trees.length;
+}
+function trainLR(X,y){
+  const p=X[0].length,n=X.length,np=y.reduce((a,b)=>a+b,0),wp=n/(2*np),wn=n/(2*(n-np));
+  let w=new Array(p).fill(0),b=0;const sig=z=>1/(1+Math.exp(-z));
+  for(let ep=0;ep<300;ep++){
+    const gw=new Array(p).fill(0);let gb=0;
+    for(let i=0;i<n;i++){let z=b;for(let j=0;j<p;j++)z+=w[j]*X[i][j];
+      const e=(sig(z)-y[i])*(y[i]?wp:wn);for(let j=0;j<p;j++)gw[j]+=e*X[i][j];gb+=e}
+    for(let j=0;j<p;j++)w[j]-=.3*(gw[j]/n+.001*w[j]);b-=.3*gb/n;
+  }
+  return x=>{let z=b;for(let j=0;j<p;j++)z+=w[j]*x[j];return sig(z)};
+}
+function prep(d,v,sp){
+  const f=v.feats.map(c=>d.cols.indexOf(c)),med=[],mu=[],sd=[];
+  f.forEach((c,j)=>{const a=sp.tr.map(i=>d.rows[i][c]).filter(x=>x!==null).sort((p,q)=>p-q);
+    const m=a.length?a[Math.floor(a.length/2)]:0;med.push(m);
+    const all=sp.tr.map(i=>d.rows[i][c]??m),mean=all.reduce((s,x)=>s+x,0)/all.length;
+    mu.push(mean);sd.push(Math.sqrt(all.reduce((s,x)=>s+(x-mean)**2,0)/all.length)||1)});
+  const tf=raw=>raw.map((x,j)=>((x===null||isNaN(x)?med[j]:x)-mu[j])/sd[j]);
+  return {f,tf,med};
+}
+function metrics(p,y,t){
+  let tp=0,fp=0,fn=0,tn=0;
+  for(let i=0;i<y.length;i++){const q=p[i]>=t?1:0;if(q&&y[i])tp++;else if(q)fp++;else if(y[i])fn++;else tn++}
+  const pr=tp+fp?tp/(tp+fp):0,rc=tp+fn?tp/(tp+fn):0;
+  return{tp,fp,fn,tn,pr,rc,f1:pr+rc?2*pr*rc/(pr+rc):0,acc:(tp+tn)/y.length};
+}
+function ap(p,y){
+  const o=p.map((v,i)=>[v,y[i]]).sort((a,b)=>b[0]-a[0]),np=y.reduce((a,b)=>a+b,0);let tp=0,s=0;
+  o.forEach((x,k)=>{if(x[1]){tp++;s+=tp/(k+1)}});return np?s/np:0;
+}
+$('#bTrain').onclick=()=>{
+  $('#bTrain').disabled=true;$('#tmsg').textContent='Training…';
+  setTimeout(()=>{
+    R=mul(7);const {d,v}=S,sp=split(d,v),pp=prep(d,v,sp);
+    const row=i=>pp.tf(pp.f.map(c=>d.rows[i][c]));
+    const Xtr=sp.tr.map(row),ytr=sp.tr.map(i=>d.rows[i][v.ti]),Xte=sp.te.map(row),yte=sp.te.map(i=>d.rows[i][v.ti]);
+    const fns={base:()=>0,lr:trainLR(Xtr,ytr),rf:trainRF(Xtr,ytr)};
+    S.pp=pp;S.fns=fns;S.yte=yte;S.sp=sp;S.Xtr=sp.tr.map(i=>d.rows[i]);S.ytr=ytr;
+    S.P={};S.AP={};for(const k in fns){S.P[k]=Xte.map(x=>fns[k](x));S.AP[k]=k=='base'?yte.reduce((a,b)=>a+b,0)/yte.length:ap(S.P[k],yte)}
+    S.sel='rf';$('#tmsg').textContent='Trained on '+sp.tr.length.toLocaleString()+' rows, tested on '+sp.te.length.toLocaleString()+'.';
+    $('#bTrain').disabled=false;$('#res').classList.remove('hide');buildForm();render();runTests(false);$('#s3').classList.remove('hide');$('#s4').classList.remove('hide');$('#s5').classList.remove('hide');
+  },30);
+};
+const NM={base:'Baseline (always legitimate)',lr:'Logistic regression',rf:'Random forest'};
+const pc=x=>(x*100).toFixed(1)+'%';
+function render(){
+  const t=+$('#th').value;$('#thv').textContent=t.toFixed(2);
+  let h='<tr><th>Model</th><th>Precision</th><th>Recall</th><th>F1</th><th>PR-AUC</th><th>Accuracy</th></tr>';
+  for(const k in NM){const m=metrics(S.P[k],S.yte,t);
+    h+='<tr class="'+(k==S.sel?'sel':'')+'" data-k="'+k+'" style="cursor:pointer"><td>'+NM[k]+'</td><td>'+m.pr.toFixed(3)+'</td><td>'+m.rc.toFixed(3)+'</td><td>'+m.f1.toFixed(3)+'</td><td>'+S.AP[k].toFixed(3)+'</td><td>'+pc(m.acc)+'</td></tr>'}
+  $('#tbl').innerHTML=h;
+  $('#tbl').querySelectorAll('tr[data-k]').forEach(r=>r.onclick=()=>{S.sel=r.dataset.k;render()});
+  const b=metrics(S.P.base,S.yte,t),m=metrics(S.P[S.sel==='base'?'rf':S.sel],S.yte,t);
+  $('#insight').textContent='The baseline is '+pc(b.acc)+' accurate yet catches 0% of fraud. At this threshold the '+NM[S.sel==='base'?'rf':S.sel].toLowerCase()+' catches '+pc(m.rc)+' of fraud, and '+pc(m.pr)+' of its fraud alerts are correct. Select a row to inspect that model.';
+  const k=S.sel,c=metrics(S.P[k],S.yte,t);$('#cmname').textContent=NM[k]+' on the test set';
+  $('#cm').innerHTML='<div class="h"></div><div class="h">Predicted legitimate</div><div class="h">Predicted fraud</div><div class="h">Actual legitimate</div><div class="g"><b>'+c.tn+'</b>correct</div><div class="r"><b>'+c.fp+'</b>false alarms</div><div class="h">Actual fraud</div><div class="r"><b>'+c.fn+'</b>missed fraud</div><div class="g"><b>'+c.tp+'</b>caught fraud</div>';
+  chart();held();
+}
+function chart(){
+  const cv=$('#cv'),dpr=window.devicePixelRatio||1,W=cv.width=cv.clientWidth*dpr,H=cv.height=230*dpr,x=cv.getContext('2d'),st=getComputedStyle(document.documentElement);
+  const k=S.sel==='base'?'rf':S.sel,pad=30*dpr,col={pr:st.getPropertyValue('--warn'),rc:st.getPropertyValue('--bad'),f1:st.getPropertyValue('--ok')};
+  x.clearRect(0,0,W,H);x.font=(11*dpr)+'px sans-serif';x.fillStyle=st.getPropertyValue('--mut');x.strokeStyle=st.getPropertyValue('--bd');
+  for(let g=0;g<=1;g+=.25){const yy=H-pad-g*(H-2*pad);x.beginPath();x.moveTo(pad,yy);x.lineTo(W-pad/2,yy);x.stroke();x.fillText(g.toFixed(2),2,yy+4*dpr)}
+  for(let g=0;g<=1;g+=.25)x.fillText((.05+g*.9).toFixed(2),pad+g*(W-1.5*pad)-8*dpr,H-8*dpr);
+  for(const s in col){x.beginPath();x.strokeStyle=col[s];x.lineWidth=2*dpr;
+    for(let t=.05,i=0;t<=.951;t+=.01,i++){const m=metrics(S.P[k],S.yte,t),px=pad+(t-.05)/.9*(W-1.5*pad),py=H-pad-m[s]*(H-2*pad);i?x.lineTo(px,py):x.moveTo(px,py)}x.stroke()}
+  const cur=pad+(+$('#th').value-.05)/.9*(W-1.5*pad);x.strokeStyle=st.getPropertyValue('--fg');x.lineWidth=dpr;x.setLineDash([4*dpr,4*dpr]);x.beginPath();x.moveTo(cur,pad/2);x.lineTo(cur,H-pad);x.stroke();x.setLineDash([]);
+  let lx=pad+6*dpr;for(const [s,n] of [['pr','Precision'],['rc','Recall'],['f1','F1']]){x.fillStyle=col[s];x.fillRect(lx,6*dpr,10*dpr,10*dpr);x.fillStyle=st.getPropertyValue('--fg');x.fillText(n,lx+14*dpr,15*dpr);lx+=80*dpr}
+}
+$('#th').oninput=render;window.addEventListener('resize',()=>S.P&&chart());
+$('#bBest').onclick=()=>{const k=S.sel==='base'?'rf':S.sel;let bt=.5,bf=-1;for(let t=.05;t<=.951;t+=.01){const f=metrics(S.P[k],S.yte,t).f1;if(f>bf){bf=f;bt=t}}$('#th').value=bt.toFixed(2);render()};
+
+/* ---- prediction ---- */
+function buildForm(){
+  $('#form').innerHTML=S.v.feats.map((c,j)=>'<div><label for="f'+j+'">'+c+'</label><input type="number" step="any" id="f'+j+'" placeholder="median '+(+S.pp.med[j].toFixed(2))+'"></div>').join('');
+  fill(0);
+}
+function fill(cls){
+  const rows=S.Xtr.filter((r,i)=>S.ytr[i]===cls);
+  S.v.feats.forEach((c,j)=>{const a=rows.map(r=>r[S.pp.f[j]]).filter(x=>x!==null);const m=a.reduce((s,x)=>s+x,0)/(a.length||1);
+    $('#f'+j).value=+(c==='hour'||c.includes('txn')||c.includes('age')?Math.round(m):m).toFixed(2)});
+  $('#out').innerHTML='';
+}
+$('#exL').onclick=()=>fill(0);$('#exF').onclick=()=>fill(1);
+$('#bPred').onclick=()=>{
+  const raw=S.v.feats.map((c,j)=>{const s=$('#f'+j).value;return s===''?null:Number(s)});
+  const k=$('#msel').value,p=S.fns[k](S.pp.tf(raw)),t=+$('#th').value,fr=p>=t,nm=raw.filter(x=>x===null).length;
+  $('#out').innerHTML='<div class="verdict '+(fr?'fraud':'legit')+'"><h3>'+(fr?'FRAUD':'LEGITIMATE')+'</h3><div>Fraud probability <b>'+(p*100).toFixed(1)+'%</b> from the '+NM[k].toLowerCase()+' (threshold '+t.toFixed(2)+').'+(nm?' '+nm+' empty field'+(nm>1?'s were':' was')+' filled with the training median.':'')+'</div><div class="bar"><i style="width:'+(p*100)+'%"></i></div></div>';
+};
+/* ---- test cases (step 4) and held-out cases (step 5) ---- */
+const SF=['amount','hour','distance_from_home','txn_last_24h','account_age_days','avg_amount_30d','amount_ratio'];
+const TC=[['Small daytime purchase near home',[25,14,3,1,2500,40,.62],0],['Regular grocery, old account',[60,18,8,2,1800,55,1.09],0],['Normal weekday lunch',[18,12,2,1,900,30,.6],0],['Large night transaction, far away, new account',[1200,2,300,7,40,45,26.7],1],['Burst of transactions at 3am',[800,3,150,9,60,50,16],1],['Very new account, huge amount',[2500,1,400,5,5,35,71],1],['Borderline: late night, normal amount',[40,23,10,2,700,45,.9],0],['Missing value (amount left empty)',[null,2,250,6,30,45,20],1]];
+const okCases=()=>S.v.feats.length==SF.length&&SF.every(c=>S.v.feats.includes(c));
+const toRaw=a=>S.v.feats.map(c=>a[SF.indexOf(c)]);
+const lab=x=>x?'FRAUD':'LEGITIMATE',fmt=(c,v)=>c+'='+(v===null||isNaN(v)?'empty':+(+v).toFixed(3));
+function setForm(raw){S.v.feats.forEach((c,j)=>$('#f'+j).value=raw[j]===null||isNaN(raw[j])?'':+(+raw[j]).toFixed(3));$('#out').innerHTML='';$('#s3').scrollIntoView()}
+function runTests(go=true){
+  const k=$('#tsel').value,t=+$('#th').value,ok=okCases();let pass=0,h='';
+  if(ok){h='<tr><th>Test case</th><th>Input</th><th>Expected</th>'+(go?'<th>Predicted</th><th>Fraud prob.</th><th>Result</th>':'')+'<th></th></tr>';
+    TC.forEach((c,i)=>{let r='';if(go){const p=S.fns[k](S.pp.tf(toRaw(c[1]))),pr=p>=t?1:0,g=pr==c[2];pass+=g;r='<td>'+lab(pr)+'</td><td>'+p.toFixed(3)+'</td><td class="'+(g?'ok':'no')+'">'+(g?'PASS':'FAIL')+'</td>'}
+      h+='<tr><td class="wrap" style="min-width:150px">'+c[0]+'</td><td class="wrap">'+SF.map((f,j)=>fmt(f,c[1][j])).join(', ')+'</td><td>'+lab(c[2])+'</td>'+r+'<td><a href="#" data-c="'+i+'" style="color:inherit">Load</a></td></tr>'})}
+  $('#tt').innerHTML=h;
+  const warn=ok?'':'<div class="msg w">The prediction cases use the sample dataset’s columns, so they are skipped for this CSV. Load the sample data to run them. The validation checks still run.</div>';
+  $('#tsum').innerHTML=warn;$('#vwrap').innerHTML='';if(!go)return;
+  R=mul(1);const base=sample(2000),ti=base.cols.indexOf(T),cl=()=>({cols:[...base.cols],rows:base.rows.map(r=>[...r])}),bad=f=>{const d=cl();f(d);return validate(d).e.length>0};
+  const V=[['Missing is_fraud column',()=>bad(d=>d.cols[ti]='x')],['Label outside 0/1 (value 2)',()=>bad(d=>d.rows[0][ti]=2)],['Missing labels (empty)',()=>bad(d=>d.rows[0][ti]=null)],['Only one class in target',()=>bad(d=>d.rows.forEach(r=>r[ti]=0))],['Non-numeric feature column',()=>bad(d=>d.bad={merchant:3})],['is_fraud is never a prediction input',()=>!S.v.feats.includes(T)],['Stratified split keeps the fraud rate',()=>{const sp=split(base,validate(base)),q=a=>a.filter(i=>base.rows[i][ti]).length/a.length;return Math.abs(q(sp.tr)-q(sp.te))<.005}]];
+  const res=V.map(([n,f])=>[n,f()]),vp=res.filter(x=>x[1]).length,all=(!ok||pass==TC.length)&&vp==V.length;
+  $('#tsum').innerHTML=warn+'<div class="msg '+(all?'w':'e')+'">'+(ok?'Prediction cases: '+pass+' of '+TC.length+' passed. ':'')+'Validation checks: '+vp+' of '+V.length+' passed. Model: '+NM[k]+', threshold '+t.toFixed(2)+'.</div>';
+  $('#vwrap').innerHTML='<h3 style="margin:18px 0 6px">Validation and robustness tests</h3><div class="tw"><table><tr><th>Check</th><th>Expected</th><th>Result</th></tr>'+res.map(x=>'<tr><td class="wrap">'+x[0]+'</td><td class="wrap">Rejected or guaranteed</td><td class="'+(x[1]?'ok':'no')+'">'+(x[1]?'PASS':'FAIL')+'</td></tr>').join('')+'</table></div>';
+}
+$('#bTests').onclick=()=>runTests();
+$('#tt').onclick=e=>{const i=e.target.dataset.c;if(i!==undefined){e.preventDefault();setForm(toRaw(TC[i][1]))}};
+let HK='rf';
+function held(){
+  const k=HK,t=+$('#th').value,p=S.P[k],y=S.yte;let g='',h='<tr><th>Outcome</th><th>Input</th><th>True label</th><th>Predicted</th><th>Fraud prob.</th><th></th></tr>';
+  [['Caught fraud',1,1],['Missed fraud',1,0],['False alarm',0,1],['Correct legitimate',0,0]].forEach(([n,ya,pa])=>{
+    const ix=y.map((v,i)=>i).filter(i=>y[i]==ya&&(p[i]>=t?1:0)==pa).sort((a,b)=>p[b]-p[a]),good=ya==pa;
+    g+='<div class="stat"><b class="'+(good?'ok':'no')+'">'+ix.length+'</b><span>'+n+'</span></div>';
+    (ix.length?[...new Set([0,(ix.length-1)>>1,ix.length-1])]:[]).forEach(j=>{const i=ix[j],raw=S.pp.f.map(c=>S.d.rows[S.sp.te[i]][c]);
+      h+='<tr><td class="wrap '+(good?'ok':'no')+'" style="min-width:110px">'+n+'</td><td class="wrap">'+S.v.feats.map((c,m)=>fmt(c,raw[m])).join(', ')+'</td><td>'+lab(y[i])+'</td><td>'+lab(p[i]>=t?1:0)+'</td><td>'+p[i].toFixed(3)+'</td><td><a href="#" data-h="'+i+'" style="color:inherit">Load</a></td></tr>'})});
+  $('#hgrid').innerHTML=g;$('#ht').innerHTML=h;
+  $('#hsub').textContent='Real transactions from the '+y.length.toLocaleString()+'-row test split that the models never saw during training, shown with their true label. This is where the '+NM[k].toLowerCase()+' is right and where it is wrong at threshold '+t.toFixed(2)+'. Change the threshold in the results section and these update.';
+  document.querySelectorAll('#s5 button[data-m]').forEach(b=>b.classList.toggle('alt',b.dataset.m!=HK));
+}
+document.querySelectorAll('#s5 button[data-m]').forEach(b=>b.onclick=()=>{HK=b.dataset.m;held()});
+$('#ht').onclick=e=>{const i=e.target.dataset.h;if(i!==undefined){e.preventDefault();setForm(S.pp.f.map(c=>S.d.rows[S.sp.te[i]][c]))}};
+</script>
+</body>
+</html>

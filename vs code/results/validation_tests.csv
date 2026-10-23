@@ -1,0 +1,10 @@
+Validation test,Expected,Actual,Status
+Missing is_fraud column,Raise ValueError,ValueError raised,PASS
+"Labels outside {0,1} (e.g. 2)",Raise ValueError,ValueError raised,PASS
+NaN in target,Raise ValueError,ValueError raised,PASS
+Only one class in target,Raise ValueError,ValueError raised,PASS
+Non-numeric feature column,Raise ValueError,ValueError raised,PASS
+is_fraud passed to predict(),Raise ValueError,ValueError raised,PASS
+Missing feature in predict(),Raise ValueError,ValueError raised,PASS
+Stratified split keeps fraud rate,Train≈Test rate,1.57% vs 1.56%,PASS
+Target not in feature set,is_fraud absent,absent,PASS

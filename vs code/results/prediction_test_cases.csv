@@ -1,0 +1,9 @@
+Test case,Expected,Predicted,Fraud prob.,Result
+Small daytime purchase near home,LEGITIMATE,LEGITIMATE,0.000,PASS
+"Regular grocery, old account",LEGITIMATE,LEGITIMATE,0.000,PASS
+Normal weekday lunch,LEGITIMATE,LEGITIMATE,0.000,PASS
+"Large night txn, far, new acct",FRAUD,FRAUD,0.896,PASS
+Burst of txns at 3am,FRAUD,FRAUD,0.967,PASS
+"Very new acct, huge amount",FRAUD,FRAUD,0.871,PASS
+"Borderline: late night, normal amt",LEGITIMATE,LEGITIMATE,0.167,PASS
+Missing value (amount=NaN),FRAUD,FRAUD,0.722,PASS
